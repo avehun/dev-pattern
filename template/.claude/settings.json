@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "ask": [
+      "Edit(src/**)",
+      "Write(src/**)",
+      "Edit(lib/**)",
+      "Write(lib/**)",
+      "Edit(app/**)",
+      "Write(app/**)",
+      "Edit(pkg/**)",
+      "Write(pkg/**)"
+    ],
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(scripts/delegate.sh:*)",
+      "Bash(scripts/new-feature.sh:*)",
+      "Bash(scripts/doctor.sh:*)",
+      "Bash(opencode agent list:*)",
+      "Bash(opencode models:*)"
+    ],
+    "deny": [
+      "Bash(git push:*)",
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ]
+  }
+}

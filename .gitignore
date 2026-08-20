@@ -1,0 +1,12 @@
+# local scratch
+.worktrees/
+*.local.md
+.DS_Store
+
+# editors
+.idea/
+.vscode/
+
+# agent runtime
+.opencode/cache/
+.claude/settings.local.json
