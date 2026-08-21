@@ -4,7 +4,7 @@ feature: 001-feature-slug
 title: Short imperative title
 status: todo            # todo | in_progress | in_review | changes_requested | done | blocked | escalated
 depends_on: []          # e.g. [T-001, T-002] — all must be `done` before delegation
-attempt: 0              # incremented by scripts/delegate.sh; attempt >= 2 triggers escalation
+attempt: 0              # incremented by delegate.sh; at max-attempts (constitution) it escalates
 agent: implementer      # implementer | test-writer | fixer
 model: opencode/big-pickle
 allowed_paths:          # the ONLY files the executor may create or modify

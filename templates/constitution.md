@@ -33,6 +33,30 @@ Every task is done only when all of these exit 0:
 Never mark work complete with a failing gate. Never disable, skip, or `--force` a gate
 to make it pass — if a gate is wrong, that is a separate task for the lead.
 
+## Delegation policy
+
+autonomy: supervised        # manual | supervised | auto
+executor-model: <provider/model>
+max-attempts: 2
+
+`autonomy` decides where the lead stops and talks to the user. The lead runs every command
+itself in `supervised` and `auto`; the user never types one.
+
+| `autonomy` | The lead stops at |
+| --- | --- |
+| `manual` | every step boundary — it prints the command and the user runs it |
+| `supervised` | confirming acceptance criteria; an escalation; the final quickstart |
+| `auto` | confirming acceptance criteria, and nothing else |
+
+At **every** level, the lead stops unconditionally when:
+
+- a quality gate fails and the fix is not obvious,
+- the change touches migrations, authentication, payments, or data deletion,
+- a new dependency is needed,
+- the request contradicts this constitution.
+
+`max-attempts` is the point at which a card escalates instead of being re-delegated.
+
 ## Principles
 
 1. **Reuse before writing.** Search the codebase for an existing utility first.

@@ -53,6 +53,16 @@ the ADRs describe why.
 | --- | --- | --- |
 | [ADR-0001](./adr/0001-example.md) | … | accepted |
 
+## Not yet mapped
+
+Parts of the system nobody has traced yet. Being listed here is honest; being described
+wrongly above is not. Move a row up into Modules once you have actually read it — usually
+when a feature first touches it.
+
+| Area | Why it is not mapped |
+| --- | --- |
+| … | … |
+
 ## Known debt
 
 | Debt | Impact | Where |

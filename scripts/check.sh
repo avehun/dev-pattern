@@ -103,6 +103,53 @@ while IFS= read -r ref; do
   [ -f "$ref" ] && pass "$ref exists" || fail "referenced but missing: $ref"
 done < <(grep -rhoE 'scripts/[a-z-]+\.sh' template templates docs README.md 2>/dev/null | sort -u)
 
+dp_info "11. The lead can run the whole cycle without the user"
+for c in onboard feature; do
+  f="template/.claude/commands/dp/$c.md"
+  [ -f "$f" ] && pass "$c command exists" || fail "missing $f"
+done
+grep -q '^## Before anything else$' template/CLAUDE.md \
+  && pass "CLAUDE.md checks for an un-onboarded project first" \
+  || fail "template/CLAUDE.md has no 'Before anything else' section — the lead will start a feature against placeholder gates"
+grep -q '^## The user does not run commands$' template/CLAUDE.md \
+  && pass "CLAUDE.md routes plain-language requests into the pipeline" \
+  || fail "template/CLAUDE.md is missing the routing section"
+grep -q '^## Where you stop for the user$' template/CLAUDE.md \
+  && pass "CLAUDE.md defines the stop points" \
+  || fail "template/CLAUDE.md is missing the autonomy section"
+
+dp_info "12. The constitution carries a delegation policy"
+AUT="$(awk '/^autonomy:[[:space:]]/ { sub(/^autonomy:[[:space:]]*/, ""); sub(/[[:space:]]*#.*$/, ""); sub(/[[:space:]]+$/, ""); print; exit }' templates/constitution.md)"
+case "$AUT" in
+  manual|supervised|auto) pass "autonomy default is '$AUT'" ;;
+  *)                      fail "templates/constitution.md has autonomy '$AUT', expected manual|supervised|auto" ;;
+esac
+for k in 'executor-model:' 'max-attempts:'; do
+  grep -q "^$k" templates/constitution.md && pass "constitution has '$k'" \
+    || fail "templates/constitution.md is missing '$k'"
+done
+grep -q 'dp_not_onboarded' scripts/status.sh && pass "status.sh reports the onboarding state" \
+  || fail "scripts/status.sh does not check whether the project is onboarded"
+grep -q 'no TTY and --auto was not given' scripts/delegate.sh \
+  && pass "delegate.sh refuses to hang without a TTY" \
+  || fail "scripts/delegate.sh can block forever when the lead runs it without --auto"
+
+
+dp_info "13. The lead has the permissions its own pipeline needs"
+if command -v jq >/dev/null 2>&1; then
+  S=template/.claude/settings.json
+  for p in 'Bash(git commit:*)' 'Bash(git switch:*)' 'Bash(git merge:*)' 'Bash(scripts/status.sh:*)'; do
+    jq -e --arg p "$p" '.permissions.allow | index($p)' "$S" >/dev/null 2>&1 \
+      && pass "allow $p" \
+      || fail "$S does not allow '$p' — the lead stalls on a permission prompt mid-pipeline"
+  done
+  jq -e '.permissions.deny | index("Bash(git push:*)")' "$S" >/dev/null 2>&1 \
+    && pass "deny Bash(git push:*)" \
+    || fail "$S must keep 'Bash(git push:*)' denied — publishing is the user's call"
+  jq -e '.permissions.ask | index("Edit(src/**)")' "$S" >/dev/null 2>&1 \
+    && pass "production code edits still ask" \
+    || fail "$S no longer asks before the lead edits src/** — that is the human's last look at the code"
+fi
 echo
 if [ "$FAILED" -eq 0 ]; then
   dp_ok "${C_BLD}All checks passed.${C_OFF}"

@@ -116,3 +116,44 @@ dp_confirm() {
   read -r reply </dev/tty || return 1
   case "$reply" in [yY]*) return 0 ;; *) return 1 ;; esac
 }
+
+# dp_autonomy PROJECT_ROOT — the constitution's autonomy level; 'supervised' when unset
+dp_autonomy() {
+  local c="$1/docs/constitution.md" v=""
+  if [ -f "$c" ]; then
+    v="$(awk '/^autonomy:[[:space:]]/ {
+                sub(/^autonomy:[[:space:]]*/, ""); sub(/[[:space:]]*#.*$/, "")
+                sub(/[[:space:]]+$/, ""); print; exit }' "$c")"
+  fi
+  case "$v" in
+    manual|supervised|auto) printf '%s\n' "$v" ;;
+    *)                      printf 'supervised\n' ;;
+  esac
+}
+
+# dp_not_onboarded PROJECT_ROOT — 0 when the project's documents still hold placeholders
+dp_not_onboarded() {
+  if grep -qF -e '<lint command>' -e '<test command>' -e '<build command>' \
+              -e '<typecheck command>' -e '<provider/model>' \
+              "$1/docs/constitution.md" 2>/dev/null; then
+    return 0
+  fi
+  if grep -qE '(^…$|\| … \|)' "$1/docs/stack.md" 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+# dp_max_attempts PROJECT_ROOT — the constitution's max-attempts; 2 when unset
+dp_max_attempts() {
+  local c="$1/docs/constitution.md" v=""
+  if [ -f "$c" ]; then
+    v="$(awk '/^max-attempts:[[:space:]]/ {
+                sub(/^max-attempts:[[:space:]]*/, ""); sub(/[[:space:]]*#.*$/, "")
+                sub(/[[:space:]]+$/, ""); print; exit }' "$c")"
+  fi
+  case "$v" in
+    ''|*[!0-9]*) printf '2\n' ;;
+    *)           printf '%s\n' "$v" ;;
+  esac
+}

@@ -1,6 +1,6 @@
 ---
-description: Hand a task card to opencode (prints the command; add --run to execute it)
-argument-hint: <T-XXX> [--run] [--auto] [--worktree] [--model provider/model]
+description: Hand a task card to opencode and report what came back
+argument-hint: <T-XXX> [--run] [--worktree] [--model provider/model]
 ---
 
 You are the tech lead. Delegate task **$ARGUMENTS** to the executor.
@@ -14,33 +14,38 @@ Read the card and confirm — do not delegate if any of these fail:
 - `allowed_paths` names real, specific files
 - the `verify` command exists and runs in this repo
 - the Context section is self-contained: no "see plan.md", no "explore the codebase"
-- `attempt < 2` — at 2, escalate instead (split the card or implement it yourself)
+- `attempt` is below `max-attempts` from the constitution — at the limit, escalate instead
 
 If the card fails validation, fix the card first. A bad card wastes a full round trip.
 
 ## Then hand it off
 
-Default is **semi-automatic**: print the exact command and let the user run it, so they
-see every edit opencode proposes.
+Read `autonomy` from the Delegation policy in `docs/constitution.md`.
+
+**At `supervised` and `auto` — run it yourself:**
+
+```bash
+bash scripts/delegate.sh <T-XXX> --auto [--worktree] [--model …]
+```
+
+`--auto` is required here, not optional. Without it `opencode run` blocks waiting for a human
+to approve each edit, and in a session you are driving nobody is there to answer — the run
+hangs until it is killed. `--auto` does not widen what the executor may do: the `deny` rules
+in `opencode.json` still hold, `allowed_paths` still bounds it, and git is still closed to it.
+
+**At `manual` — print it and stop:**
 
 ```bash
 bash scripts/delegate.sh <T-XXX> --dry-run
 ```
 
-Show the user the resulting command and a one-line summary of what the task will do.
-
-**If the user passed `--run`**, execute the delegation yourself:
-
-```bash
-bash scripts/delegate.sh <T-XXX> [--auto] [--worktree] [--model …]
-```
-
-`--auto` lets opencode apply edits without asking. It is still bounded by the `deny` rules
-in `opencode.json`, but the user should have chosen it deliberately — never add it yourself.
+Show the user the resulting command and a one-line summary of what the task will do, so they
+can watch every edit opencode proposes. `--run` in the arguments overrides this for one task.
 
 ## After it returns
 
 Report: which files changed (`git diff --stat`), whether the report was written, and the
-report's `outcome`. Then tell the user to run `/dp:review <T-XXX>`.
+report's `outcome`. At `manual`, tell the user to run `/dp:review <T-XXX>`. At `supervised` and
+`auto`, go straight on to the review yourself.
 
 Do not review the code in this step, and do not fix the executor's work yourself.

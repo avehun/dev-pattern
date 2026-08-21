@@ -16,7 +16,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --dir)     ROOT="$2"; shift ;;
     --title)   TITLE="$2"; shift ;;
-    -h|--help) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)        dp_die "unknown option: $1" ;;
     *)         SLUG="$1" ;;
   esac

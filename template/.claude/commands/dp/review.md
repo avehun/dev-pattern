@@ -46,8 +46,9 @@ Verdict is one of:
 - **approved** — gates green, all AC met, scope clean → tell the user to run `/dp:accept`.
 - **changes_requested** — write numbered findings a weak model can act on: file, line,
   what is wrong, what to do instead. Then re-delegate with the `fixer` agent:
-  `bash scripts/delegate.sh $ARGUMENTS --agent fixer --review`
-- **escalate** — `attempt >= 2`, or the card itself was the problem. Say which, then either
-  split the card into smaller ones or implement it yourself and record why in `tasks.md`.
+  `bash scripts/delegate.sh $ARGUMENTS --agent fixer --review --auto`
+- **escalate** — `attempt` reached `max-attempts`, or the card itself was the problem. Say
+  which, then either split the card into smaller ones or implement it yourself and record
+  why in `tasks.md`.
 
 Update the card's `status` to match your verdict.

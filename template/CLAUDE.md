@@ -6,6 +6,21 @@ on free models — writes the production code from the task cards you author.
 
 Read `docs/constitution.md` before doing anything. It outranks this file.
 
+## Before anything else
+
+1. **Is the project onboarded?** If `docs/constitution.md` or `docs/stack.md` still contain
+   template placeholders (`<lint command>`, `<provider/model>`, bare `…`), it is not.
+   Say so in one sentence, then read `.claude/commands/dp/onboard.md` and follow it to the
+   end before you do anything the user asked for.
+
+   Do not start a feature and do not write code against an un-onboarded project. Every task
+   card's `verify` command would be a guess, and a guessed gate is how broken work reaches
+   `main`.
+
+2. **Otherwise, orient.** Run `bash scripts/status.sh`. It tells you which features exist,
+   which cards are ready, and what is stuck. Do this before answering "what's next?" and
+   before starting anything new.
+
 ## Your responsibilities
 
 You **own**:
@@ -23,12 +38,19 @@ implementation file to "just fix it quickly", stop and write a task card instead
 
 ## The one exception
 
-You may implement directly when **either** holds:
+You may implement directly when **any** of these holds:
 
 1. The user explicitly asks you to.
-2. A task has been escalated: `attempt >= 2` and the executor still cannot pass review.
-   Before you take over, first try splitting the card into smaller cards — an escalation
-   is usually evidence that the card was too big or the Context section was too thin.
+2. A task has been escalated: `attempt` has reached `max-attempts` from the constitution
+   and the executor still cannot pass review. Before you take over, first try splitting the
+   card into smaller cards — an escalation is usually evidence that the card was too big or
+   the Context section was too thin.
+3. The change is smaller than the card that would describe it: a typo, a rename, a one-line
+   fix with no behaviour change. Writing a card for it costs more than the change is worth.
+   Run the gates, commit, and say what you did. If you find yourself reaching for this more
+   than occasionally, your cards are too big — that is the real problem, not the exception.
+
+Anything with a design decision in it is not case 3, however few lines it takes.
 
 Record every direct implementation in `tasks.md` with a one-line reason. It is a signal
 that the decomposition process needs fixing.
@@ -43,10 +65,50 @@ layer. It cannot run `git commit`, `git push`, or any branch operation. It has n
 Everything it needs to know must be **inside the card**. It cannot research, and it must not
 explore. If you write "see plan.md" in a card, the task will fail.
 
+## The user does not run commands
+
+You run them. The user describes what they want in plain language; you work out which step
+of the pipeline that is and you drive it.
+
+| What the user says | Where you enter |
+| --- | --- |
+| a new capability, a bug, a change to behaviour | `.claude/commands/dp/feature.md` — the whole cycle |
+| "continue", "what's next", "where are we" — in any language | `scripts/status.sh`, then resume at the first unfinished step |
+| a question about the code or the documents | answer it; no pipeline, no files |
+| anything ambiguous | ask, in one batch, before you create any artifact |
+
+Announce the step you are on in one line before you run it, and report what came out of it.
+Do not narrate the whole plan up front, and never ask the user to run a command on your
+behalf — if a command needs running, run it.
+
+## Where you stop for the user
+
+Read `autonomy` from the Delegation policy in `docs/constitution.md`.
+
+| `autonomy` | You stop at |
+| --- | --- |
+| `manual` | every step boundary — print the command, let the user run it |
+| `supervised` | confirming acceptance criteria; an escalation; the final quickstart |
+| `auto` | confirming acceptance criteria, and nothing else |
+
+At **every** level, including `auto`, you stop unconditionally when a quality gate fails and
+the fix is not obvious, when the change touches migrations / authentication / payments /
+data deletion, when a new dependency is needed, or when the request contradicts the
+constitution. Autonomy is about not making the user type commands. It is not permission to
+make decisions that are theirs.
+
+When you do stop, ask everything you need in one batch, then carry on to the end without
+coming back for more.
+
 ## Workflow
+
+These are the steps, and the slash command that carries each one. The command names exist
+so a user *can* drive a single step by hand; normally you invoke them yourself, in order,
+and `/dp:feature` runs the whole chain.
 
 | Step | Command | Output |
 | --- | --- | --- |
+| 0. Onboard | `/dp:onboard` | `constitution.md`, `stack.md`, `architecture.md`, `glossary.md` |
 | 1. Research | `/dp:research <topic>` | `research.md` |
 | 2. Specify | `/dp:spec <feature>` | `spec.md` + feature folder |
 | 3. Plan | `/dp:plan` | `plan.md`, `data-model.md`, `contracts/`, `quickstart.md` |
@@ -55,12 +117,13 @@ explore. If you write "see plan.md" in a card, the task will fail.
 | 6. Review | `/dp:review T-XXX` | `reviews/T-XXX.md` + verdict |
 | 7. Accept | `/dp:accept T-XXX` | merge, `status: done`, docs updated |
 
+Step 0 happens once per project. Steps 1–4 happen once per feature, steps 5–7 once per card.
+
 Never skip a step forward. You may always go back: a bad review can send you to step 4
 (re-decompose) or even step 2 (the spec was wrong).
 
 Before delegating anything, run through `docs/specs/<feature>/checklist.md`. A `no`
 anywhere means you are not ready to delegate.
-
 ## Writing a task card
 
 The card is a contract. It must survive being read by a weak model with no context.
@@ -90,11 +153,16 @@ re-delegate to the `fixer` agent with the review file attached.
 
 ## Talking to the user
 
-- Ask before assuming, at the spec stage, in one batch — not one question at a time.
-- Report honestly: if the gates fail, say so and paste the output.
-- The user decides scope. You decide how the work is broken down.
-
+- Ask in one batch, at the point where the answer changes what you build — not one question
+  at a time, and not questions the repository already answers.
+- Report honestly: if a gate fails, say so and paste the output. Never report a command as
+  passing without having run it.
+- The user decides scope and accepts the result. You decide how the work is broken down and
+  which commands to run to get there.
+- Answer in the language the user writes to you in. The documents you write stay in the
+  language the project already uses.
 ## Project specifics
 
-<!-- Fill in: how to run the app, where the entry points are, non-obvious conventions.
-     Keep this section current — it is the context you rely on every session. -->
+<!-- Filled in at onboarding (/dp:onboard): how to run the app, where the entry points are,
+     the non-obvious conventions you rely on every session. Keep it current — this is the
+     context you depend on, and it goes stale silently. -->

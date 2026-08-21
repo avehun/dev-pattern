@@ -57,6 +57,10 @@ for f in CLAUDE.md AGENTS.md opencode.json docs/constitution.md; do
   [ -f "$ROOT/$f" ] && check_ok "$f" || check_fail "missing $f — run scripts/init.sh"
 done
 
+for f in .claude/commands/dp/onboard.md .claude/commands/dp/feature.md; do
+  [ -f "$ROOT/$f" ] && check_ok "$f" || check_fail "missing $f — run scripts/init.sh"
+done
+
 for d in .claude/commands/dp .opencode/agents docs/specs docs/.templates; do
   [ -d "$ROOT/$d" ] && check_ok "$d/" || check_fail "missing $d/ — run scripts/init.sh"
 done
@@ -93,12 +97,23 @@ if command -v opencode >/dev/null 2>&1; then
   done
 fi
 
-# ---- constitution actually filled in
+# ---- onboarding: are the project's own documents filled in?
 if [ -f "$ROOT/docs/constitution.md" ]; then
-  if grep -q '<lint command>\|<test command>\|<build command>' "$ROOT/docs/constitution.md"; then
-    check_fail "docs/constitution.md still has placeholder quality gates — fill them in before delegating"
+  if dp_not_onboarded "$ROOT"; then
+    check_fail "project is not onboarded — docs/constitution.md or docs/stack.md still hold
+        template placeholders. Open Claude Code here and say what you want to do; the lead
+        reads the codebase, asks you what it cannot work out, and fills them in. Or run
+        /dp:onboard directly."
   else
-    check_ok "quality gates in docs/constitution.md are filled in"
+    check_ok "project documents are filled in (autonomy: $(dp_autonomy "$ROOT"))"
+  fi
+
+  AUT="$(awk '/^autonomy:[[:space:]]/ { print; exit }' "$ROOT/docs/constitution.md")"
+  if [ -n "$AUT" ]; then
+    check_ok "delegation policy present"
+  else
+    check_fail "docs/constitution.md has no 'autonomy:' line — add the Delegation policy
+        section from docs/.templates/constitution.md, or the lead cannot know where to stop"
   fi
 fi
 

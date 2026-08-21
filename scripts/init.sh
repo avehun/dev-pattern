@@ -112,11 +112,18 @@ fi
 
 cat <<EOF
 
-${C_BLD}Next steps${C_OFF}
-  1. Fill in the quality gates and stack in ${C_BLU}docs/constitution.md${C_OFF} and ${C_BLU}docs/stack.md${C_OFF}.
-     Every task card's verify command depends on these being true.
-  2. Review the bash allow/deny lists in ${C_BLU}opencode.json${C_OFF} for your stack.
-  3. Authenticate opencode if you have not:  ${C_BLU}opencode auth login${C_OFF}
-  4. Check the setup:                        ${C_BLU}bash scripts/doctor.sh${C_OFF}
-  5. Start a feature in Claude Code:         ${C_BLU}/dp:research <topic>${C_OFF}  then  ${C_BLU}/dp:spec <slug>${C_OFF}
+${C_BLD}Next step${C_OFF}
+  Open Claude Code in this directory and say what you want to build.
+
+  ${C_BLU}claude${C_OFF}
+  > I need to add <the thing you want>
+
+  The lead will notice the project is not onboarded yet, read the codebase, ask you what it
+  cannot work out on its own, and fill in ${C_BLU}docs/constitution.md${C_OFF}, ${C_BLU}docs/stack.md${C_OFF},
+  ${C_BLU}docs/architecture.md${C_OFF} and ${C_BLU}docs/glossary.md${C_OFF} — then get on with the feature.
+  You never have to edit those by hand, and you never have to run a command again.
+
+${C_DIM}  Optional
+    opencode auth login       needed before any task can be delegated
+    bash scripts/doctor.sh    checks the install; /dp:onboard re-runs the interview${C_OFF}
 EOF

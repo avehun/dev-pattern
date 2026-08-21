@@ -7,7 +7,8 @@
 #   --agent NAME      override the card's agent (implementer | fixer | test-writer)
 #   --model M         override the card's model, e.g. opencode/big-pickle
 #   --review          also attach the review file (use with --agent fixer)
-#   --auto            let opencode apply edits without asking (deny rules still apply)
+#   --auto            apply edits without asking (deny rules still apply); required
+#                     when there is no TTY, or opencode blocks forever on approval
 #   --worktree        run in an isolated git worktree under .worktrees/<T-XXX>
 #   --no-branch       do not create a branch; run on the current one
 #   --dry-run         print the command and validation result, change nothing
@@ -29,7 +30,7 @@ while [ $# -gt 0 ]; do
     --no-branch) NO_BRANCH=1 ;;
     --dry-run)   DRY=1 ;;
     --force)     FORCE=1 ;;
-    -h|--help)   sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)   sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)          dp_die "unknown option: $1" ;;
     *)           TASK="$1" ;;
   esac
@@ -57,6 +58,17 @@ printf '    card    %s\n' "${CARD#"$ROOT"/}"
 printf '    agent   %s\n' "$AGENT"
 printf '    model   %s\n' "${MODEL:-<opencode default>}"
 printf '    status  %s (attempt %s)\n' "$STATUS" "$ATTEMPT"
+printf '    policy  autonomy: %s\n' "$(dp_autonomy "$ROOT")"
+
+# ---------------------------------------------------------------- policy
+AUTONOMY="$(dp_autonomy "$ROOT")"
+MAX_ATTEMPTS="$(dp_max_attempts "$ROOT")"
+
+if [ "$AUTONOMY" = "manual" ] && [ "$AUTO" = "1" ] && [ "$FORCE" = "0" ]; then
+  dp_die "constitution says 'autonomy: manual' but --auto was given.
+        In manual mode the user watches every edit opencode proposes.
+        Change the Delegation policy in docs/constitution.md, or pass --force."
+fi
 
 # ---------------------------------------------------------------- validation
 FAIL=0
@@ -83,8 +95,8 @@ while IFS= read -r dep; do
   [ "$depstatus" = "done" ] || fail "depends_on $dep is '$depstatus', not 'done'"
 done < <(dp_fm_list "$CARD" depends_on)
 
-if [ "$ATTEMPT" -ge 2 ] 2>/dev/null; then
-  fail "attempt is $ATTEMPT — escalate instead: split the card, rewrite its Context, or implement it yourself"
+if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ] 2>/dev/null; then
+  fail "attempt is $ATTEMPT of $MAX_ATTEMPTS — escalate instead: split the card, rewrite its Context, or implement it yourself"
 fi
 
 # ignore HTML comments — authoring notes are allowed to mention what not to write
@@ -192,6 +204,12 @@ if [ "$DRY" = "1" ]; then
   echo; echo
   dp_dim "  Run it yourself, or re-run this script without --dry-run."
   exit 0
+fi
+
+if [ ! -t 0 ] && [ "$AUTO" = "0" ]; then
+  dp_die "no TTY and --auto was not given — opencode would block forever waiting for
+        someone to approve each edit. Pass --auto (the deny rules in opencode.json still
+        apply), or run this command in a terminal yourself."
 fi
 
 dp_require_cmd opencode "Install it from https://opencode.ai, then run: opencode auth login"

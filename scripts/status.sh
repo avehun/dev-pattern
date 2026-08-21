@@ -18,6 +18,14 @@ done
 ROOT="$(cd "$ROOT" && pwd)"
 SPECS="$ROOT/docs/specs"
 
+if dp_not_onboarded "$ROOT"; then
+  printf '%sproject not onboarded%s — docs/constitution.md / docs/stack.md still hold\n' "$C_RED" "$C_OFF"
+  printf '  template placeholders. Nothing downstream is trustworthy until they are filled\n'
+  printf '  in: run /dp:onboard in Claude Code, or just say what you want and the lead will.\n\n'
+else
+  printf '%sautonomy:%s %s\n' "$C_DIM" "$C_OFF" "$(dp_autonomy "$ROOT")"
+fi
+
 if [ ! -d "$SPECS" ]; then
   echo "no docs/specs/ — nothing to report"
   exit 0
