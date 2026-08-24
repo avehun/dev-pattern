@@ -21,8 +21,8 @@ the source of truth for a task's `status`.
 
 ## Order of execution
 
-Tasks with no unmet `depends_on` may run in any order, one at a time
-(or in parallel git worktrees — see `scripts/delegate.sh --worktree`).
+Tasks with no unmet `depends_on` may run in any order, one at a time (or in parallel —
+delegate each with `isolation: "worktree"` and issue their Agent tool calls together).
 
 1. **Wave 1 (parallel):** T-001, T-002
 2. **Wave 2:** T-003

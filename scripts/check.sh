@@ -12,7 +12,7 @@ pass() { dp_ok "$1"; }
 fail() { dp_err "$1"; FAILED=$((FAILED + 1)); }
 
 dp_info "1. Shell scripts parse"
-for s in scripts/*.sh scripts/lib/*.sh; do
+for s in scripts/*.sh scripts/lib/*.sh template/.claude/hooks/*.sh; do
   bash -n "$s" 2>/dev/null && pass "$s" || fail "$s has a syntax error"
 done
 
@@ -25,28 +25,65 @@ else
   dp_warn "jq not installed — skipping"
 fi
 
-dp_info "3. Executor is denied the lead's files"
-if command -v jq >/dev/null 2>&1; then
-  for p in 'docs/**' 'CLAUDE.md' 'AGENTS.md' '.claude/**' '.opencode/**' 'opencode.json'; do
-    v="$(jq -r --arg p "$p" '.permission.edit[$p] // "unset"' template/opencode.json)"
-    [ "$v" = "deny" ] && pass "edit '$p' = deny" || fail "edit '$p' is '$v', expected deny"
-  done
-  v="$(jq -r '.permission.edit["docs/specs/*/reports/**"] // "unset"' template/opencode.json)"
-  [ "$v" = "allow" ] && pass "executor can write its reports" || fail "reports path is '$v', expected allow"
-  for b in 'git commit*' 'git push*' 'git reset*'; do
-    v="$(jq -r --arg b "$b" '.permission.bash[$b] // "unset"' template/opencode.json)"
-    [ "$v" = "deny" ] && pass "bash '$b' = deny" || fail "bash '$b' is '$v', expected deny"
-  done
+dp_info "3. dp-guard.sh actually enforces the executor's boundaries (live synthetic test)"
+HOOK="$ROOT/template/.claude/hooks/dp-guard.sh"
+if [ -x "$HOOK" ]; then
+  T="$(mktemp -d)"
+  mkdir -p "$T/.claude" "$T/src" "$T/docs"
+  cat > "$T/.claude/dp-active-task.json" <<'JSON'
+{"task_id":"T-CHECK","feature":"check","agent":"dp-implementer","allowed_paths":["src/allowed.ts"],"report_path":"docs/report.md","delegated_at":"2026-01-01T00:00:00Z"}
+JSON
+  echo '{"extra_deny": ["legacy/**"]}' > "$T/.claude/dp-guard.json"
+
+  assert_hook() {  # assert_hook LABEL PAYLOAD EXPECT_EXIT
+    local label="$1" payload="$2" expect="$3" got
+    got="$(CLAUDE_PROJECT_DIR="$T" bash -c "cd '$T' && echo '$payload' | bash '$HOOK' >/dev/null 2>&1; echo \$?")"
+    [ "$got" = "$expect" ] && pass "$label (exit $got)" || fail "$label — expected exit $expect, got $got"
+  }
+
+  assert_hook "lead's own call (no agent_type) always passes through" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"docs/constitution.md"}}' 0
+
+  assert_hook "executor blocked from docs/**" \
+    '{"agent_type":"dp-implementer","tool_name":"Edit","tool_input":{"file_path":"docs/constitution.md"}}' 2
+
+  assert_hook "executor blocked from CLAUDE.md" \
+    '{"agent_type":"dp-implementer","tool_name":"Edit","tool_input":{"file_path":"CLAUDE.md"}}' 2
+
+  assert_hook "executor allowed its own report path (exception inside docs/**)" \
+    "{\"agent_type\":\"dp-implementer\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$T/docs/report.md\"}}" 0
+
+  assert_hook "executor allowed a file in allowed_paths" \
+    "{\"agent_type\":\"dp-implementer\",\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$T/src/allowed.ts\"}}" 0
+
+  assert_hook "executor blocked from a file NOT in allowed_paths" \
+    "{\"agent_type\":\"dp-implementer\",\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$T/src/other.ts\"}}" 2
+
+  assert_hook "executor blocked from an extra_deny path" \
+    "{\"agent_type\":\"dp-implementer\",\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$T/legacy/old.ts\"}}" 2
+
+  assert_hook "executor blocked from git commit" \
+    '{"agent_type":"dp-implementer","tool_name":"Bash","tool_input":{"command":"git commit -m x"}}' 2
+
+  assert_hook "executor blocked from git push hidden in a compound command" \
+    '{"agent_type":"dp-fixer","tool_name":"Bash","tool_input":{"command":"echo hi && git push origin main"}}' 2
+
+  assert_hook "executor allowed to run tests" \
+    '{"agent_type":"dp-implementer","tool_name":"Bash","tool_input":{"command":"npm test -- src/foo"}}' 0
+
+  rm -rf "$T"
+else
+  fail ".claude/hooks/dp-guard.sh is missing or not executable — cannot run the live synthetic test"
 fi
 
-dp_info "4. Agent definitions have required frontmatter"
-for a in template/.opencode/agents/*.md; do
+dp_info "4. Executor subagents have required frontmatter and run on sonnet"
+for a in template/.claude/agents/*.md; do
   ok=1
-  for k in description mode model; do
+  for k in name description model tools; do
     [ -n "$(dp_fm "$a" "$k")" ] || { fail "$a is missing '$k'"; ok=0; }
   done
-  m="$(dp_fm "$a" mode)"
-  case "$m" in primary|subagent|all) ;; *) fail "$a has mode '$m'"; ok=0 ;; esac
+  m="$(dp_fm "$a" model)"
+  [ "$m" = "sonnet" ] || { fail "$a has model '$m', expected 'sonnet'"; ok=0; }
   [ "$ok" = "1" ] && pass "$(basename "$a")"
 done
 
@@ -58,7 +95,7 @@ done
 dp_info "6. Artifact templates have frontmatter"
 for t in templates/*.md; do
   case "$(basename "$t")" in
-    constitution.md|adr.md|task-card.md|executor-report.md|review-report.md|spec.md|plan.md|tasks.md|research.md|data-model.md|quickstart.md|checklist.md)
+    constitution.md|adr.md|task-card.md|executor-report.md|review-report.md|spec.md|plan.md|tasks.md|research.md|data-model.md|quickstart.md|checklist.md|knowledge-module.md)
       head -1 "$t" | grep -q '^---$' && pass "$(basename "$t")" || fail "$t does not start with frontmatter" ;;
   esac
 done
@@ -73,13 +110,13 @@ for k in id feature status depends_on attempt agent model allowed_paths verify; 
   [ -n "$(dp_fm templates/task-card.md "$k")$(dp_fm_list templates/task-card.md "$k")" ] \
     && pass "task-card frontmatter has '$k'" || fail "task-card.md frontmatter is missing '$k'"
 done
+AGENT_DEFAULT="$(dp_fm templates/task-card.md agent)"
+case "$AGENT_DEFAULT" in
+  dp-implementer|dp-fixer|dp-test-writer) pass "task-card agent default is '$AGENT_DEFAULT'" ;;
+  *) fail "task-card.md agent default is '$AGENT_DEFAULT', expected a dp-* subagent name" ;;
+esac
 
-dp_info "8. AGENTS.md stays short enough for a weak model"
-LINES="$(wc -l < template/AGENTS.md)"
-[ "$LINES" -le 110 ] && pass "AGENTS.md is $LINES lines" \
-  || fail "AGENTS.md is $LINES lines — keep it under ~100 or free models will drift"
-
-dp_info "9. Relative markdown links resolve"
+dp_info "8. Relative markdown links resolve"
 BROKEN=0
 while IFS= read -r f; do
   dir="$(dirname "$f")"
@@ -98,13 +135,24 @@ done < <(find . -name '*.md' -not -path './.git/*' -not -path './templates/*' -n
 [ "$BROKEN" = "0" ] && pass "no broken relative links in docs/ and README" \
   || fail "$BROKEN broken relative link(s)"
 
-dp_info "10. Templates reference only real script names"
+dp_info "9. Templates reference only real script names"
 while IFS= read -r ref; do
   [ -f "$ref" ] && pass "$ref exists" || fail "referenced but missing: $ref"
 done < <(grep -rhoE 'scripts/[a-z-]+\.sh' template templates docs README.md 2>/dev/null | sort -u)
 
+dp_info "10. No leftover references to opencode"
+HITS=0
+while IFS= read -r f; do
+  while IFS= read -r line; do
+    dp_err "  $f: $line"
+    HITS=$((HITS + 1))
+  done < <(grep -in 'opencode\|AGENTS\.md\|\.opencode/' "$f" 2>/dev/null)
+done < <(find template templates docs README.md CLAUDE.md scripts -type f \( -name '*.md' -o -name '*.sh' -o -name '*.json' \) 2>/dev/null | grep -v '/check\.sh$')
+[ "$HITS" = "0" ] && pass "no references to opencode, AGENTS.md, or .opencode/ remain" \
+  || fail "$HITS leftover opencode reference(s) — this repo no longer uses opencode"
+
 dp_info "11. The lead can run the whole cycle without the user"
-for c in onboard feature; do
+for c in onboard feature delegate; do
   f="template/.claude/commands/dp/$c.md"
   [ -f "$f" ] && pass "$c command exists" || fail "missing $f"
 done
@@ -130,15 +178,22 @@ for k in 'executor-model:' 'max-attempts:'; do
 done
 grep -q 'dp_not_onboarded' scripts/status.sh && pass "status.sh reports the onboarding state" \
   || fail "scripts/status.sh does not check whether the project is onboarded"
-grep -q 'no TTY and --auto was not given' scripts/delegate.sh \
-  && pass "delegate.sh refuses to hang without a TTY" \
-  || fail "scripts/delegate.sh can block forever when the lead runs it without --auto"
-
+grep -q "add -A -- ':!.claude'" scripts/prepare-delegation.sh \
+  && pass "prepare-delegation.sh commits pending changes before delegating" \
+  || fail "scripts/prepare-delegation.sh does not commit before delegating — isolation:\"worktree\" only sees committed state, this was confirmed to break real delegation"
 
 dp_info "13. The lead has the permissions its own pipeline needs"
 if command -v jq >/dev/null 2>&1; then
   S=template/.claude/settings.json
-  for p in 'Bash(git commit:*)' 'Bash(git switch:*)' 'Bash(git merge:*)' 'Bash(scripts/status.sh:*)'; do
+  MODEL="$(jq -r '.model // "unset"' "$S")"
+  [ "$MODEL" = "opus" ] && pass "lead pinned to opus" || fail "$S has model '$MODEL', expected \"opus\""
+
+  jq -e '.hooks.PreToolUse // empty | length > 0' "$S" >/dev/null 2>&1 \
+    && pass "PreToolUse hook registered" \
+    || fail "$S registers no PreToolUse hook — dp-guard.sh would never run"
+
+  for p in 'Bash(git commit:*)' 'Bash(git switch:*)' 'Bash(git merge:*)' \
+           'Bash(scripts/prepare-delegation.sh:*)' 'Bash(scripts/set-status.sh:*)' 'Bash(scripts/status.sh:*)'; do
     jq -e --arg p "$p" '.permissions.allow | index($p)' "$S" >/dev/null 2>&1 \
       && pass "allow $p" \
       || fail "$S does not allow '$p' — the lead stalls on a permission prompt mid-pipeline"
@@ -150,6 +205,18 @@ if command -v jq >/dev/null 2>&1; then
     && pass "production code edits still ask" \
     || fail "$S no longer asks before the lead edits src/** — that is the human's last look at the code"
 fi
+
+dp_info "14. The knowledge base exists and is wired into the pipeline"
+[ -f template/docs/knowledge/INDEX.md ] && pass "template/docs/knowledge/INDEX.md exists" \
+  || fail "missing template/docs/knowledge/INDEX.md"
+[ -f templates/knowledge-module.md ] && pass "templates/knowledge-module.md exists" \
+  || fail "missing templates/knowledge-module.md"
+for c in research onboard review accept; do
+  grep -qi 'knowledge' "template/.claude/commands/dp/$c.md" \
+    && pass "$c.md references the knowledge base" \
+    || fail "template/.claude/commands/dp/$c.md never mentions docs/knowledge/ — findings will not accumulate"
+done
+
 echo
 if [ "$FAILED" -eq 0 ]; then
   dp_ok "${C_BLD}All checks passed.${C_OFF}"

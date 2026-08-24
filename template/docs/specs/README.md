@@ -17,8 +17,8 @@ NNN-feature-slug/
 └── reviews/T-XXX.md the verdict and findings                     (lead)
 ```
 
-The executor can write only inside `reports/`. Everything else is denied at the permission
-layer in `opencode.json`.
+The executor can write only inside `reports/`. Everything else is blocked for it by a
+project hook (`.claude/hooks/dp-guard.sh`), not by convention.
 
 ## Numbering
 

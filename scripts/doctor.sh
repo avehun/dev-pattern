@@ -25,76 +25,89 @@ check_fail() { dp_err "$1"; PROBLEMS=$((PROBLEMS + 1)); }
 dp_info "Checking ${C_BLD}$ROOT${C_OFF}"
 
 # ---- tooling
-if command -v opencode >/dev/null 2>&1; then
-  check_ok "opencode installed ($(opencode --version 2>/dev/null | head -1))"
-else
-  check_fail "opencode not found — install it from https://opencode.ai"
-fi
-
 if command -v git >/dev/null 2>&1; then
   if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
     check_ok "git repository"
   else
-    check_fail "not a git repository — review has no diff to read; run: git init"
+    check_fail "not a git repository — worktree-isolated delegation and review both need one; run: git init"
   fi
 else
   check_fail "git not found"
 fi
 
-command -v jq >/dev/null 2>&1 && check_ok "jq installed" || dp_warn "jq not found (optional, used by checks)"
-
-# ---- credentials
-if command -v opencode >/dev/null 2>&1; then
-  CREDS="$(timeout 30 opencode auth list 2>/dev/null | grep -oE '[0-9]+ credential' | head -1)"
-  case "$CREDS" in
-    ""|"0 credential") check_fail "opencode has no credentials — run: opencode auth login" ;;
-    *)                 check_ok "opencode credentials: $CREDS" ;;
-  esac
-fi
+command -v jq >/dev/null 2>&1 && check_ok "jq installed" || check_fail "jq not found — required by dp-guard.sh and every dp_* helper"
 
 # ---- files
-for f in CLAUDE.md AGENTS.md opencode.json docs/constitution.md; do
+for f in CLAUDE.md docs/constitution.md .claude/settings.json .claude/dp-guard.json; do
   [ -f "$ROOT/$f" ] && check_ok "$f" || check_fail "missing $f — run scripts/init.sh"
 done
 
-for f in .claude/commands/dp/onboard.md .claude/commands/dp/feature.md; do
+for f in .claude/commands/dp/onboard.md .claude/commands/dp/feature.md .claude/commands/dp/delegate.md; do
   [ -f "$ROOT/$f" ] && check_ok "$f" || check_fail "missing $f — run scripts/init.sh"
 done
 
-for d in .claude/commands/dp .opencode/agents docs/specs docs/.templates; do
+for d in .claude/commands/dp .claude/agents .claude/hooks docs/specs docs/.templates docs/knowledge/modules; do
   [ -d "$ROOT/$d" ] && check_ok "$d/" || check_fail "missing $d/ — run scripts/init.sh"
 done
 
-# ---- config validity
-if [ -f "$ROOT/opencode.json" ] && command -v jq >/dev/null 2>&1; then
-  jq empty "$ROOT/opencode.json" 2>/dev/null \
-    && check_ok "opencode.json is valid JSON" \
-    || check_fail "opencode.json is not valid JSON"
-
-  for path in 'docs/**' 'CLAUDE.md' '.claude/**'; do
-    v="$(jq -r --arg p "$path" '.permission.edit[$p] // "unset"' "$ROOT/opencode.json" 2>/dev/null)"
-    [ "$v" = "deny" ] \
-      && check_ok "executor denied edit access to $path" \
-      || check_fail "opencode.json does not deny edit on $path — the executor could rewrite the lead's documents"
-  done
+# ---- the hook that enforces the executor's boundaries
+if [ -f "$ROOT/.claude/hooks/dp-guard.sh" ]; then
+  if [ -x "$ROOT/.claude/hooks/dp-guard.sh" ]; then
+    check_ok ".claude/hooks/dp-guard.sh is executable"
+  else
+    check_fail ".claude/hooks/dp-guard.sh exists but is not executable — chmod +x it (or re-run scripts/init.sh)"
+  fi
+else
+  check_fail "missing .claude/hooks/dp-guard.sh — the executor's boundaries would not be enforced at all"
 fi
 
+# ---- config validity
 if [ -f "$ROOT/.claude/settings.json" ] && command -v jq >/dev/null 2>&1; then
-  jq empty "$ROOT/.claude/settings.json" 2>/dev/null \
+  S="$ROOT/.claude/settings.json"
+  jq empty "$S" 2>/dev/null \
     && check_ok ".claude/settings.json is valid JSON" \
     || check_fail ".claude/settings.json is not valid JSON"
+
+  MODEL="$(jq -r '.model // "unset"' "$S" 2>/dev/null)"
+  [ "$MODEL" = "opus" ] \
+    && check_ok "lead is pinned to opus" \
+    || check_fail ".claude/settings.json has model '$MODEL', expected \"opus\" — the lead should not silently run on whatever the user's default is"
+
+  jq -e '.hooks.PreToolUse // empty | length > 0' "$S" >/dev/null 2>&1 \
+    && check_ok "PreToolUse hook is registered" \
+    || check_fail ".claude/settings.json registers no PreToolUse hook — dp-guard.sh would never run"
+
+  jq -e '.permissions.deny // [] | index("Bash(git push:*)")' "$S" >/dev/null 2>&1 \
+    && check_ok "deny Bash(git push:*)" \
+    || check_fail "$S must keep 'Bash(git push:*)' denied — publishing is the user's call, not the lead's"
 fi
 
-# ---- agents visible to opencode
-if command -v opencode >/dev/null 2>&1; then
-  AGENTS_OUT="$( (cd "$ROOT" && timeout 60 opencode agent list 2>/dev/null) | grep -E '^[a-z-]+ \(' || true)"
-  for a in implementer fixer test-writer; do
-    if printf '%s\n' "$AGENTS_OUT" | grep -q "^$a "; then
-      check_ok "agent '$a' is loaded"
-    else
-      check_fail "agent '$a' is not loaded — check .opencode/agents/$a.md"
-    fi
-  done
+if [ -f "$ROOT/.claude/dp-guard.json" ] && command -v jq >/dev/null 2>&1; then
+  jq empty "$ROOT/.claude/dp-guard.json" 2>/dev/null \
+    && check_ok ".claude/dp-guard.json is valid JSON" \
+    || check_fail ".claude/dp-guard.json is not valid JSON"
+fi
+
+# ---- the three executor subagents
+for a in dp-implementer dp-fixer dp-test-writer; do
+  f="$ROOT/.claude/agents/$a.md"
+  if [ ! -f "$f" ]; then
+    check_fail "missing .claude/agents/$a.md — the executor cannot be invoked at all"
+    continue
+  fi
+  MODEL="$(dp_fm "$f" model)"
+  if [ "$MODEL" = "sonnet" ]; then
+    check_ok "$a is loaded (model: sonnet)"
+  else
+    check_fail "$a.md has model '$MODEL', expected 'sonnet'"
+  fi
+done
+
+# ---- knowledge base
+if [ -f "$ROOT/docs/knowledge/INDEX.md" ]; then
+  check_ok "docs/knowledge/INDEX.md exists"
+else
+  check_fail "missing docs/knowledge/INDEX.md — the lead has nowhere to record what it has already learned; run scripts/init.sh or /dp:onboard"
 fi
 
 # ---- onboarding: are the project's own documents filled in?

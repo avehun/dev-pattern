@@ -2,7 +2,7 @@
 task: T-001
 feature: 001-feature-slug
 agent: implementer
-model: opencode/big-pickle
+model: sonnet
 attempt: 1
 outcome: done          # done | blocked | partial
 date: YYYY-MM-DD

@@ -45,6 +45,9 @@ larger one.
 Run the four steps in order, each per its own command file. Between them, announce the step
 in one line and report what came out — not the whole document, the decision inside it.
 
+Read `docs/knowledge/INDEX.md` before any exploration in the research step — only investigate
+what is not already indexed there.
+
 **Stop for the user at the acceptance criteria**, at every autonomy level. Show them the
 `AC-n` list from `spec.md` and get confirmation before you plan against it. This is the one
 checkpoint that is never skipped: every task card, every review, and the definition of done
@@ -55,32 +58,33 @@ are not ready, and the fix is in your own artifacts, not in the executor.
 
 ## 6. Run the cards
 
-For each card that `scripts/status.sh` reports as ready, in dependency order:
+For each card that `scripts/status.sh` reports as ready, in dependency order, per
+`/dp:delegate.md`:
 
 ```bash
-bash scripts/delegate.sh <T-XXX> --auto      # --auto is required when you run it yourself
+bash scripts/prepare-delegation.sh <T-XXX>
 ```
 
-`--auto` is not a shortcut around safety — the `deny` rules in `opencode.json` still hold,
-and the executor still cannot leave `allowed_paths`, touch `docs/`, or run git. It only means
-opencode does not block waiting for a human to approve each edit, which it would do forever
-in a session you are driving. At `autonomy: manual`, print the command instead and let the
-user run it.
+Then call the Agent tool yourself (`subagent_type: dp-implementer`, `isolation: "worktree"`,
+the card as the prompt) — bash cannot do this step. `prepare-delegation.sh` already committed
+whatever the card needed committed, so the executor's isolated worktree sees it.
 
-Cards with no dependency between them can run at the same time:
+Independent, ready cards → run `prepare-delegation.sh` for each one, then issue **all their
+Agent tool calls in the same message** — they run in parallel, replacing what used to be
+backgrounded shell jobs.
 
-```bash
-bash scripts/delegate.sh T-002 --worktree --auto &
-bash scripts/delegate.sh T-003 --worktree --auto &
-```
+After each call returns, do not trust its summary: use the `worktreePath` from the result,
+`git -C <worktreePath> diff --stat` yourself, and check the changed files against
+`allowed_paths`. Then `bash scripts/set-status.sh <T-XXX> in_review`.
 
 Then review each one per `/dp:review`: run the `verify` command and the gates yourself, check
 every `AC` with a `file:line`, check the diff against `allowed_paths`. The report is a claim,
 not evidence.
 
 - `approved` → accept it per `/dp:accept` and move to the next card.
-- `changes_requested` → `bash scripts/delegate.sh <T-XXX> --agent fixer --review --auto`,
-  then review again.
+- `changes_requested` → `bash scripts/prepare-delegation.sh <T-XXX> --agent dp-fixer`, then
+  call the Agent tool with `subagent_type: "dp-fixer"` and the review attached, then review
+  again.
 - `escalate` → **stop and tell the user**, at `supervised` and `manual`. Say which it is: the
   card was too big, its Context was too thin, or the model cannot do this. Recommend splitting
   it, and say plainly if you think you should implement it yourself. At `auto`, split the card

@@ -58,6 +58,12 @@ Fill `docs/architecture.md` to the depth you can actually verify:
 Whatever you did not open, list under `## Not yet mapped`. That section is honest and it is
 useful: you will fill it in as features touch those areas. An invented module table is not.
 
+For every module you traced deeply enough to be worth remembering, also write
+`docs/knowledge/modules/<name>.md` (from `docs/.templates/knowledge-module.md`) with the
+same file:line map at greater depth, and add its row to `docs/knowledge/INDEX.md`. This is
+what lets the next research step skip re-deriving what you already worked out today — see
+`docs/knowledge-base.md`. Link it from the architecture table's `Deep dive` column.
+
 Fill `docs/glossary.md` from the domain type and entity names you saw — the words that
 appear in both the code and the way the team talks about the product.
 
@@ -78,12 +84,10 @@ Cover:
    (confirming acceptance criteria, an escalation, the final quickstart), and that at every
    level you still stop for failing gates, migrations, auth, payments, data deletion, and new
    dependencies. Default to `supervised`.
-3. **The executor** — which free model opencode should run, and whether `opencode auth login`
-   has been done. If opencode is not installed or not authenticated, say plainly that
-   delegation will not work until it is.
-4. **Off-limits areas** — legacy directories, generated code, vendored code, anything the
-   executor must never touch. These become `deny` entries in `opencode.json`.
-5. **What is not visible in the code** — domain terms you could not infer, conventions the
+3. **Off-limits areas** — legacy directories, generated code, vendored code, anything the
+   executor must never touch beyond the standing rules (`docs/`, `.claude/`, `CLAUDE.md`,
+   dependency manifests, git). These become `extra_deny` entries in `.claude/dp-guard.json`.
+4. **What is not visible in the code** — domain terms you could not infer, conventions the
    team follows but never wrote down, things that broke before and must not break again.
 
 ## 5. Write the documents
@@ -94,20 +98,21 @@ Cover:
 | `docs/stack.md` | the stack table and every command, copy-pasteable and verified |
 | `docs/architecture.md` | the module map from step 3, plus `## Not yet mapped` |
 | `docs/glossary.md` | domain terms and their type names |
+| `docs/knowledge/modules/*.md`, `docs/knowledge/INDEX.md` | deep-dive notes from step 3 |
 | `CLAUDE.md` → `## Project specifics` | how to run the app, entry points, the non-obvious conventions you will rely on every session |
-| `opencode.json` | `bash` allow/deny tuned to this stack, plus the off-limits paths as `edit` denies |
+| `.claude/dp-guard.json` | project-specific `extra_deny` paths from the interview |
 
 Leave no placeholder behind. `<lint command>`, `<provider/model>`, and bare `…` are the
 markers that say "not onboarded", and every later session checks for them.
 
-Do not weaken the executor's existing denies on `docs/`, `CLAUDE.md`, `AGENTS.md`,
-`.claude/`, `.opencode/`, `opencode.json`, or git. Those are the boundary the whole pattern
-rests on; you may only add to them.
+Do not weaken the executor's existing boundaries: `docs/`, `CLAUDE.md`, `.claude/`,
+dependency manifests, and git are blocked for it by a project hook
+(`.claude/hooks/dp-guard.sh`), not by convention. You may only add to `.claude/dp-guard.json`'s
+`extra_deny`, never touch the hook itself or narrow what it already blocks.
 
 ## 6. Prove it
 
-Run `bash scripts/doctor.sh` and show the output as it is. Fix what it reports, or explain
-what the user has to do themselves (authenticating opencode is theirs, nothing else is).
+Run `bash scripts/doctor.sh` and show the output as it is. Fix what it reports.
 
 ## If the project is already onboarded
 

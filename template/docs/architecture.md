@@ -18,9 +18,13 @@ but never edits it.
 
 ## Modules
 
-| Module | Responsibility | Entry point | Depends on |
-| --- | --- | --- | --- |
-| … | … | `src/…` | … |
+`Deep dive` links to `docs/knowledge/modules/<name>.md` only where that file actually exists
+— cumulative, append-only notes (file:line map, contracts, gotchas) that save the lead from
+re-deriving the same thing next time. See `docs/knowledge-base.md`.
+
+| Module | Responsibility | Entry point | Depends on | Deep dive |
+| --- | --- | --- | --- | --- |
+| … | … | `src/…` | … | link to `knowledge/modules/<name>.md` once it exists |
 
 ## Data flow
 

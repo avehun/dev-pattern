@@ -6,9 +6,9 @@ updated: YYYY-MM-DD
 
 # Constitution
 
-The highest-priority rules of this project. **Both agents read this file** — the lead
-(Claude Code) and the executor (opencode). When any instruction conflicts with this
-file, this file wins. Only the lead edits it, and only with the user's agreement.
+The highest-priority rules of this project. **Both agents read this file** — the lead and
+the executor, both Claude Code, running on different models. When any instruction conflicts
+with this file, this file wins. Only the lead edits it, and only with the user's agreement.
 
 Keep it short. A constitution nobody can hold in their head is not enforced.
 
@@ -36,7 +36,7 @@ to make it pass — if a gate is wrong, that is a separate task for the lead.
 ## Delegation policy
 
 autonomy: supervised        # manual | supervised | auto
-executor-model: <provider/model>
+executor-model: sonnet
 max-attempts: 2
 
 `autonomy` decides where the lead stops and talks to the user. The lead runs every command
@@ -94,5 +94,6 @@ Details in `docs/stack.md`. Architecture in `docs/architecture.md`.
 ## Roles
 
 The split of responsibility between the lead and the executor is defined in `CLAUDE.md`
-(lead) and `AGENTS.md` (executor) and enforced by permissions in `opencode.json` and
+(lead) and the executor's own subagent files (`.claude/agents/dp-implementer.md` and
+friends), and enforced by a project hook (`.claude/hooks/dp-guard.sh`) plus
 `.claude/settings.json`. Neither agent may reinterpret its own boundaries.

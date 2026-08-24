@@ -1,5 +1,16 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "model": "opus",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/dp-guard.sh" }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "ask": [
       "Edit(src/**)",
@@ -20,12 +31,11 @@
       "Bash(git switch:*)",
       "Bash(git merge:*)",
       "Bash(git worktree:*)",
-      "Bash(scripts/delegate.sh:*)",
+      "Bash(scripts/prepare-delegation.sh:*)",
+      "Bash(scripts/set-status.sh:*)",
       "Bash(scripts/new-feature.sh:*)",
       "Bash(scripts/doctor.sh:*)",
-      "Bash(scripts/status.sh:*)",
-      "Bash(opencode agent list:*)",
-      "Bash(opencode models:*)"
+      "Bash(scripts/status.sh:*)"
     ],
     "deny": [
       "Bash(git push:*)",

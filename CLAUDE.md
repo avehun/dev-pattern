@@ -10,20 +10,28 @@
 | `README.md`, `docs/*.md` | методология для человека | русский |
 | `template/` | то, что `init.sh` раскатывает в целевой проект | английский |
 | `templates/` | шаблоны спек-артефактов (уезжают в `docs/.templates/`) | английский |
-| `scripts/` | `init`, `new-feature`, `delegate`, `doctor`, `status`, `check` | — |
+| `scripts/` | `init`, `new-feature`, `prepare-delegation`, `set-status`, `doctor`, `status`, `check` | — |
 
 **`template/` (единственное число) — файлы для установки. `templates/` (множественное) —
 шаблоны артефактов.** Не путать.
 
+Обе роли в раскатанном проекте — Claude Code: лид на Opus (`template/CLAUDE.md`,
+`template/.claude/settings.json`), исполнитель на Sonnet (три сабагента в
+`template/.claude/agents/dp-*.md`). Границы исполнителя принуждает PreToolUse-хук
+`template/.claude/hooks/dp-guard.sh`, а не отдельный конфиг прав — второго инструмента
+в этом паттерне больше нет вообще.
+
 ## Правила
 
-- Машиночитаемое — по-английски: `template/CLAUDE.md`, `template/AGENTS.md`, промпты
-  агентов, шаблоны артефактов. Слабые модели заметно хуже следуют инструкциям на русском.
+- Машиночитаемое — по-английски: `template/CLAUDE.md`, промпты сабагентов исполнителя,
+  шаблоны артефактов.
 - Объяснения для человека — по-русски: `README.md` и `docs/`.
-- `template/AGENTS.md` держать под ~100 строк. Это проверяет `check.sh`.
 - Меняете шаблон карточки — обновите и `docs/task-cards.md`, и проверки в `check.sh`.
-- Меняете права в `template/opencode.json` — обновите таблицу в `docs/roles.md` и
-  проверки в `scripts/doctor.sh` и `scripts/check.sh`.
+- Меняете статический deny-лист или логику в `template/.claude/hooks/dp-guard.sh` —
+  обновите таблицу в `docs/roles.md`, синтетические тесты в `scripts/check.sh` (раздел 3)
+  и, если меняются денай-пути, проверки в `scripts/doctor.sh`.
+- Меняете фронтматтер сабагентов (`template/.claude/agents/dp-*.md`) — держите `model:
+  sonnet` для всех троих; это проверяет `check.sh`.
 - Скрипты: `set -euo pipefail`. Осторожно с `cond && cmd` на одной строке — под `set -e`
   ложное условие уронит скрипт. Пишите `if … then … fi`.
 - Зависимости скриптов: `bash`, `git`, `jq`, `awk`, `sed`. Больше ничего не добавлять.
@@ -31,12 +39,14 @@
 ## Проверка перед коммитом
 
 ```bash
-bash scripts/check.sh                       # оффлайн-самопроверка репозитория
+bash scripts/check.sh                       # оффлайн-самопроверка репозитория, включая
+                                             # живой синтетический тест dp-guard.sh
 
 # сквозной прогон инсталлятора на пустом проекте
 T=$(mktemp -d) && (cd "$T" && git init -q && bash "$OLDPWD/scripts/init.sh" . \
   && bash scripts/new-feature.sh demo && bash scripts/doctor.sh; rm -rf "$T")
 ```
 
-`check.sh` обязан быть зелёным. `doctor.sh` в чистом проекте штатно ругается на две
-вещи: отсутствие credentials у opencode и незаполненные гейты в конституции.
+`check.sh` обязан быть зелёным. `doctor.sh` в чистом проекте штатно ругается на одно —
+незаполненные гейты в конституции (проект не онбординжен). Авторизация отдельно не нужна:
+оба агента — один и тот же Claude Code.

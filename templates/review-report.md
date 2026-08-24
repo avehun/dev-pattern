@@ -39,7 +39,7 @@ $ npm test -- src/example
 | --- | --- |
 | Only `allowed_paths` touched | yes / no — list strays |
 | No new dependencies | yes / no |
-| No edits under `docs/`, `.claude/`, `.opencode/` | yes / no |
+| No edits under `docs/`, `.claude/` | yes / no |
 | No git history changes | yes / no |
 
 ## Findings
