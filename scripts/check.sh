@@ -89,8 +89,14 @@ check "researcher escapes with .."                  "$(guard $RS Write "$(f "$G_
 check "researcher writes outside the repo"          "$(guard $RS Write "$(f /etc/passwd)")" deny
 check "researcher runs git log"                     "$(guard $RS Bash "$(c 'git log --oneline -5')")" allow
 check "researcher runs dp-kb-stale"                 "$(guard $RS Bash "$(c dp-kb-stale)")" allow
-check "researcher redirects output"                 "$(guard $RS Bash "$(c 'git log > out')")" pass
-check "researcher runs other commands"              "$(guard $RS Bash "$(c 'npm test')")" pass
+check "researcher chains read-only commands"        "$(guard $RS Bash "$(c 'cat src/a.ts; dp-kb-stale && git ls-files')")" allow
+check "researcher pipes read-only commands"         "$(guard $RS Bash "$(c 'git log --oneline | head -5')")" allow
+check "researcher: bare command before &&"          "$(guard $RS Bash "$(c 'pwd && git ls-files')")" allow
+check "researcher redirects output"                 "$(guard $RS Bash "$(c 'git log > out')")" deny
+check "researcher writes with a heredoc"            "$(guard $RS Bash "$(c 'cat > docs/x.md <<EOF')")" deny
+check "researcher edits with sed -i"                "$(guard $RS Bash "$(c "sed -i s/a/b/ src/a.ts")")" deny
+check "researcher uses git diff --output"           "$(guard $RS Bash "$(c 'git diff --output=x')")" deny
+check "researcher runs other commands"              "$(guard $RS Bash "$(c 'npm test')")" deny
 check "researcher commits"                          "$(guard $RS Bash "$(c 'ls && git commit -m x')")" deny
 check "worker edits code"                           "$(guard $WK Edit "$(f "$G_REPO/src/a.ts")")" pass
 check "worker edits docs/"                          "$(guard $WK Edit "$(f "$G_REPO/docs/readme.md")")" deny
@@ -159,6 +165,14 @@ check "after 3 blocks the hook lets go"             "$(stop s2 true)" message
 printf '// TODO(human): your turn\n' > "$S/src/e.ts"
 start s3 >/dev/null; echo x > "$S/src/f.ts"; printf '// TODO(human): your turn\n' >> "$S/src/f.ts"
 check "TODO(human) exercise may pause the turn"     "$(stop s3)" pass
+start s5 >/dev/null; echo g > "$S/src/g.ts"
+printf '# Notes\nno frontmatter\n' > "$S/docs/dp/knowledge/notes.md"
+check "module without covers/verified_at → block"  "$(stop s5)" block
+printf -- '---\ntopic: notes\ncovers: [src/g.ts]\nverified_at: %s\n---\n# Notes\n' "$(git -C "$S" rev-parse --short HEAD)" > "$S/docs/dp/knowledge/notes.md"
+check "fixed module counts as documentation"        "$(stop s5)" pass
+mkdir -p "$S/src/sub"
+start s6 >/dev/null; echo h > "$S/src/h.ts"
+check "session started in a subdirectory"           "$(jq -cn --arg c "$S/src/sub" '{session_id: "s6", cwd: $c}' | "$P/scripts/stop-docs.sh" | jq -r .decision)" block
 mkdir -p "$S/.git/dp" && touch "$S/.git/dp/disabled"
 check "disabled repository: no context"             "$(start s4)" ""
 rm -f "$S/.git/dp/disabled"

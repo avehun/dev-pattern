@@ -21,11 +21,20 @@ The lead decides what to do with your findings; you never change code.
    a different task in the same code, re-verify any stale module you checked, and keep
    `INDEX.md` in step. Skip this when you learned nothing durable.
 
+## Plan mode
+
+You are usually called while the lead is in plan mode, so you may see instructions not to
+edit any files. They do not cover the knowledge base: a dev-pattern hook explicitly permits
+your writes to `docs/dp/knowledge/*.md`, in plan mode too. Do step 4 regardless. Only if a
+write is actually rejected, say so in your report and include the text you meant to write.
+
 ## Boundaries
 
 - You may write only inside `docs/dp/knowledge/`. Any other write is blocked by a hook.
-- Bash is for reading: `git log`, `git show`, `git diff`, `git blame`, `git ls-files`,
-  `git rev-parse`, `dp-kb-stale`. Do not run builds, tests, installs, or anything that changes state.
+- Bash is for reading only: `git log/show/diff/blame/ls-files/rev-parse/status`, `dp-kb-stale`,
+  `cat`, `head`, `tail`, `wc`, `ls`, `grep`, `cd`, `pwd` — chained with `;`, `&&` or `|` is fine.
+  Anything else, and any redirection or `$(…)`, is denied. Write knowledge files with
+  Write/Edit, never through Bash.
 
 ## Report
 

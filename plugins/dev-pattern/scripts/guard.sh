@@ -2,8 +2,8 @@
 # PreToolUse guard for the dev-pattern subagents. It never touches the main session's own
 # tool calls or any other agent.
 #
-#   researcher  may write only inside the knowledge base (allowed even in plan mode);
-#               a short list of read-only git commands runs without a prompt.
+#   researcher  may write only inside the knowledge base (allowed even in plan mode)
+#               and run only read-only Bash commands from an allow-list.
 #   worker      may not edit docs/, .claude/, CLAUDE.md, .git/ or dependency manifests,
 #               and may not run state-changing git or package-install commands.
 #
@@ -82,11 +82,32 @@ esac
 CMD="$(jq -r '.tool_input.command // empty' <<<"$IN")"
 [ -n "$CMD" ] || exit 0
 
-# Naive split on ; && || | — it does not parse quoting, so `bash -c "..."` can slip past.
-# The guard narrows what a subagent does by accident; it is not a sandbox.
+# Commands are split naively on ; && || | — quoting is not parsed. That is why the researcher
+# gets an allow-list (anything unrecognised is denied) rather than a block-list.
+segments() { sed -E 's/(&&|\|\||;|\|)/\n/g' <<<"$CMD" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | awk 'NF'; }
+
+# researcher: read-only commands only — plan mode does not stop file writes made through Bash,
+# so this is what keeps its writes inside the knowledge base.
+if [ "$ROLE" = "researcher" ]; then
+  RO='git log, git show, git diff, git blame, git ls-files, git rev-parse, git status, dp-kb-stale, cat, head, tail, wc, ls, grep, pwd, cd'
+  case "$CMD" in
+    *'>'*|*'<'*|*'`'*|*'$('*|*'--output'*)
+      deny "the researcher may not use redirection, substitution or --output in Bash. Read with Read/Grep/Glob; write the knowledge base with Write/Edit." ;;
+  esac
+  while IFS= read -r seg; do
+    case "$seg" in
+      *'&'*) deny "the researcher may not run background commands." ;;
+      'git log'|'git log '*|'git show'|'git show '*|'git diff'|'git diff '*|'git blame '*) ;;
+      'git ls-files'|'git ls-files '*|'git rev-parse '*|'git status'|'git status '*) ;;
+      'dp-kb-stale'|'dp-kb-stale '*|'cat '*|'head '*|'tail '*|'wc '*|'ls'|'ls '*|'grep '*|'pwd'|'cd '*) ;;
+      *) deny "'$seg' is not a read-only command the researcher may run ($RO). Read with Read/Grep/Glob; write the knowledge base with Write/Edit." ;;
+    esac
+  done < <(segments)
+  allow "read-only command for the researcher"
+fi
+
+# worker: no state-changing git, no dependency installs
 while IFS= read -r seg; do
-  seg="$(sed -E 's/^[[:space:]]+//' <<<"$seg")"
-  [ -n "$seg" ] || continue
   for p in 'git commit' 'git push' 'git checkout' 'git switch' 'git reset' 'git rebase' \
            'git stash' 'git merge' 'git cherry-pick' 'git tag' 'git branch -d' 'git branch -D' \
            'git clean' 'git restore' 'git rm' 'git mv' 'git add' \
@@ -97,18 +118,5 @@ while IFS= read -r seg; do
       "$p"*) deny "'$seg' is for the lead only (blocked prefix '$p')." ;;
     esac
   done
-done < <(sed -E 's/(&&|\|\||;|\|)/\n/g' <<<"$CMD")
-
-# researcher: a single read-only command from the list runs without a prompt
-if [ "$ROLE" = "researcher" ]; then
-  case "$CMD" in
-    *'>'*|*'<'*|*';'*|*'&'*|*'|'*|*'`'*|*'$('*) exit 0 ;;
-  esac
-  for p in 'git log' 'git show' 'git diff' 'git blame' 'git ls-files' 'git rev-parse' \
-           'git status' 'dp-kb-stale'; do
-    case "$CMD" in
-      "$p"|"$p "*) allow "read-only command for the researcher" ;;
-    esac
-  done
-fi
+done < <(segments)
 exit 0

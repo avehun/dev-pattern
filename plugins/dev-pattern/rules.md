@@ -22,6 +22,7 @@ These rules come from the dev-pattern plugin. You are the lead: you decide and y
   Brief: goal, files it may change, steps, one verify command, out of scope. Then read its
   diff and run the verify command yourself.
 - Finish with docs: update the project docs the change affects and the knowledge modules
-  covering the code you touched (`dp-kb-stale` lists stale ones). A Stop hook blocks the end
+  covering the code you touched (`dp-kb-stale` lists stale ones). Write modules by the
+  `dev-pattern:knowledge` skill — `covers:` and `verified_at:` are required. A Stop hook blocks the end
   of your turn while code changed and no docs did. If no doc truly needs a change, run
   `dp-docs-waive "<reason>"` and tell the user the reason.
