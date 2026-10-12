@@ -17,6 +17,28 @@ dp_state_dir() {
   printf '%s/dp\n' "$gd"
 }
 
+# The plugin is active in a project only after setup created the knowledge index.
+dp_active() {
+  [ -f "$(dp_kb_dir)/INDEX.md" ]
+}
+
+# Git tree id of the whole working tree as it is on disk right now: tracked changes,
+# untracked files, deletions; .gitignore respected. Built in a throwaway index, so the
+# real index and the working tree are untouched (it only adds unreachable objects that
+# git gc removes).
+dp_worktree_tree() {
+  local sd tmp tree
+  sd="$(dp_state_dir)" || return 1
+  mkdir -p "$sd" || return 1
+  tmp="$sd/index.tmp.$$"
+  cp "$(git rev-parse --path-format=absolute --git-path index)" "$tmp" 2>/dev/null || rm -f "$tmp"
+  tree="$(cd "$(dp_root)" && GIT_INDEX_FILE="$tmp" git add -A . >/dev/null 2>&1 \
+          && GIT_INDEX_FILE="$tmp" git write-tree 2>/dev/null)"
+  rm -f "$tmp"
+  [ -n "$tree" ] || return 1
+  printf '%s\n' "$tree"
+}
+
 # Print the value of a scalar frontmatter key: dp_fm_get FILE KEY
 dp_fm_get() {
   awk -v key="$2" '

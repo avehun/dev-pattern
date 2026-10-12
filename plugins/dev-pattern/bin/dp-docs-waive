@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Record that the current code changes need no documentation update, with a reason.
+# The waiver is tied to the exact working tree: any further change needs a new one.
+#
+#   dp-docs-waive "<reason>"
+set -euo pipefail
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../scripts" && pwd)/lib.sh"
+
+if [ $# -eq 0 ] || [ -z "$*" ]; then
+  echo 'usage: dp-docs-waive "<why no documentation needs to change>"' >&2
+  exit 2
+fi
+
+SD="$(dp_state_dir)" || { echo "dp-docs-waive: not a git repository" >&2; exit 1; }
+TREE="$(dp_worktree_tree)" || { echo "dp-docs-waive: could not read the working tree" >&2; exit 1; }
+mkdir -p "$SD/waivers"
+printf '%s\n' "$*" > "$SD/waivers/$TREE"
+echo "waived for the current working tree: $*"
