@@ -7,7 +7,8 @@
 #
 # Changes are measured against the working-tree state recorded at session start, so work
 # that was already uncommitted before the session does not count. A waiver written by
-# `dp-docs-waive` for the exact current tree lets the turn end. After 3 blocks in a row the
+# `dp-docs-waive` for the exact current tree lets the turn end, and so does a TODO(human)
+# marker in the changed code (a tutor-practice exercise). After 3 blocks in a row the
 # hook lets go and warns the user, so a stuck session can never loop forever.
 # Fail-open: any error exits 0.
 set -uo pipefail
@@ -44,6 +45,10 @@ while IFS= read -r f; do
 done < <(git diff --name-only "$BASE" "$NOW" 2>/dev/null)
 
 if [ "${#code[@]}" -eq 0 ] || [ "$docs" = "1" ]; then pass; fi
+
+# A TODO(human) marker means a tutor-practice exercise is waiting for the user: the work is
+# deliberately unfinished, so the turn may end.
+if git grep -q -F 'TODO(human)' "$NOW" -- "${code[@]}" 2>/dev/null; then exit 0; fi
 
 WAIVER="$SD/waivers/$NOW"
 if [ -f "$WAIVER" ]; then
