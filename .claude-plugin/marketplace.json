@@ -1,6 +1,9 @@
 {
   "name": "dev-pattern",
-  "owner": { "name": "avehun" },
+  "description": "dev-pattern: knowledge base, plan-before-work, enforced doc updates and tutor styles for Claude Code",
+  "owner": {
+    "name": "avehun"
+  },
   "plugins": [
     {
       "name": "dev-pattern",
