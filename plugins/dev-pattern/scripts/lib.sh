@@ -17,9 +17,13 @@ dp_state_dir() {
   printf '%s/dp\n' "$gd"
 }
 
-# The plugin is active in a project only after setup created the knowledge index.
+# The plugin is active in a project once it has a knowledge index (setup creates it;
+# teammates get it with the repository), unless dp-uninstall switched it off.
 dp_active() {
-  [ -f "$(dp_kb_dir)/INDEX.md" ]
+  local sd
+  [ -f "$(dp_kb_dir)/INDEX.md" ] || return 1
+  if sd="$(dp_state_dir)" && [ -f "$sd/disabled" ]; then return 1; fi
+  return 0
 }
 
 # Git tree id of the whole working tree as it is on disk right now: tracked changes,

@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# Set dev-pattern up in the current git repository.
+#
+#   dp-setup --mode shared|local [--force] [--dry-run]
+#
+#   shared  settings go to .claude/settings.json and docs/dp/ is meant to be committed,
+#           so teammates get the same workflow.
+#   local   settings go to .claude/settings.local.json and docs/dp/ is excluded via
+#           .git/info/exclude — nothing of it reaches the repository.
+#
+# Existing settings keys with a different value are left alone and reported; --force sets
+# them anyway. Everything changed is recorded in .git/dp/install.json so dp-uninstall can
+# undo exactly that, restoring the settings file byte for byte when it was not edited since.
+set -euo pipefail
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../scripts" && pwd)/lib.sh"
+
+MODE="" FORCE=0 DRY=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --mode)    MODE="${2:-}"; shift ;;
+    --force)   FORCE=1 ;;
+    --dry-run) DRY=1 ;;
+    -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "dp-setup: unknown argument: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+case "$MODE" in
+  shared|local) ;;
+  *) echo "dp-setup: --mode shared|local is required" >&2; exit 2 ;;
+esac
+
+SD="$(dp_state_dir)" || { echo "dp-setup: run it inside a git repository" >&2; exit 1; }
+ROOT="$(dp_root)"
+MANIFEST="$SD/install.json"
+if [ -f "$MANIFEST" ]; then
+  echo "dev-pattern is already set up here (mode: $(jq -r .mode "$MANIFEST")). Run dp-uninstall first to change it."
+  exit 0
+fi
+
+if [ "$MODE" = "shared" ]; then SREL=".claude/settings.json"; else SREL=".claude/settings.local.json"; fi
+SFILE="$ROOT/$SREL"
+KB_REL="${DP_KB_DIR:-docs/dp/knowledge}"
+
+if [ -f "$SFILE" ] && ! jq empty "$SFILE" 2>/dev/null; then
+  echo "dp-setup: $SREL is not valid JSON; fix it first — nothing was changed" >&2
+  exit 1
+fi
+CUR="$(if [ -f "$SFILE" ]; then cat "$SFILE"; else echo '{}'; fi)"
+
+# key path (JSON array) <TAB> desired value (JSON)
+WANT=$'["model"]\t"opus"\n["permissions","defaultMode"]\t"plan"\n["enabledPlugins","dev-pattern@dev-pattern"]\ttrue'
+if [ "$MODE" = "shared" ]; then
+  WANT+=$'\n["extraKnownMarketplaces","dev-pattern"]\t{"source":{"source":"github","repo":"avehun/dev-pattern"}}'
+fi
+
+NEW="$CUR" KEYS='[]'
+while IFS=$'\t' read -r path want; do
+  has="$(jq --argjson p "$path" 'try (getpath($p) != null) catch false' <<<"$NEW")"
+  have="$(jq -c --argjson p "$path" 'try getpath($p) catch null' <<<"$NEW")"
+  name="$(jq -r 'join(".")' <<<"$path")"
+  if [ "$have" = "$(jq -c . <<<"$want")" ]; then
+    echo "  = $name already $have"
+    continue
+  fi
+  if [ "$has" = "true" ] && [ "$FORCE" = "0" ]; then
+    echo "  ! $name is $have — left unchanged (dev-pattern wants $want; rerun with --force to set it)"
+    continue
+  fi
+  parent="$(jq -c '.[:-1]' <<<"$path")"
+  parent_new="$(jq --argjson p "$parent" 'if ($p | length) == 0 then false else (try (getpath($p) == null) catch true) end' <<<"$NEW")"
+  NEW="$(jq --argjson p "$path" --argjson v "$want" 'setpath($p; $v)' <<<"$NEW")"
+  KEYS="$(jq -c --argjson p "$path" --argjson v "$want" --argjson had "$has" --argjson prev "$have" --argjson pn "$parent_new" \
+    '. + [{path: $p, value: $v, had: $had, previous: $prev, parent_created: $pn}]' <<<"$KEYS")"
+  echo "  + $name = $want"
+done <<<"$WANT"
+
+CREATED='[]' EXCLUDED='[]'
+INDEX="$ROOT/$KB_REL/INDEX.md"
+EXCLUDE="$(git rev-parse --path-format=absolute --git-path info/exclude)"
+
+if [ "$DRY" = "1" ]; then
+  echo "dry run: would write $SREL$( [ -f "$INDEX" ] || echo ", create $KB_REL/INDEX.md" )$( [ "$MODE" = local ] && echo ", add docs/dp/ to .git/info/exclude" )"
+  exit 0
+fi
+
+mkdir -p "$SD/backup"
+SETTINGS_EXISTED=false
+if [ -f "$SFILE" ]; then SETTINGS_EXISTED=true; cp "$SFILE" "$SD/backup/settings.json"; fi
+if [ "$(jq length <<<"$KEYS")" -gt 0 ]; then
+  mkdir -p "$(dirname "$SFILE")"
+  jq . <<<"$NEW" > "$SFILE.dp-tmp" && mv "$SFILE.dp-tmp" "$SFILE"
+fi
+
+if [ ! -f "$INDEX" ]; then
+  mkdir -p "$(dirname "$INDEX")"
+  cp "$(dirname "${BASH_SOURCE[0]}")/../templates/kb-index.md" "$INDEX"
+  CREATED='["'"$KB_REL/INDEX.md"'"]'
+  echo "  + $KB_REL/INDEX.md"
+fi
+
+if [ "$MODE" = "local" ]; then
+  mkdir -p "$(dirname "$EXCLUDE")"
+  for line in "/docs/dp/" "/$SREL"; do
+    if ! grep -qxF "$line" "$EXCLUDE" 2>/dev/null; then
+      printf '%s\n' "$line" >> "$EXCLUDE"
+      EXCLUDED="$(jq -c --arg l "$line" '. + [$l]' <<<"$EXCLUDED")"
+      echo "  + .git/info/exclude: $line"
+    fi
+  done
+fi
+
+rm -f "$SD/disabled"
+WRITTEN_SHA="$(if [ -f "$SFILE" ]; then git hash-object "$SFILE"; fi)"
+jq -n --arg mode "$MODE" --arg sfile "$SREL" --argjson existed "$SETTINGS_EXISTED" \
+  --arg sha "$WRITTEN_SHA" --argjson keys "$KEYS" --argjson created "$CREATED" \
+  --argjson excluded "$EXCLUDED" --arg date "$(date +%F)" \
+  '{mode: $mode, settings_file: $sfile, settings_existed: $existed, settings_written_sha: $sha,
+    keys: $keys, created: $created, excluded: $excluded, date: $date}' > "$MANIFEST"
+
+echo "dev-pattern is set up ($MODE). Start a new Claude Code session here to load it."

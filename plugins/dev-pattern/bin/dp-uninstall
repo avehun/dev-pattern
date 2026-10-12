@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Undo dp-setup in the current git repository, using .git/dp/install.json.
+#
+#   dp-uninstall [--purge-kb]
+#
+# The settings file is restored byte for byte when nobody edited it after setup; otherwise
+# only the keys setup added are removed (and only while they still hold setup's value).
+# The knowledge base is kept unless --purge-kb is given; without it the plugin's hooks are
+# switched off for this repository.
+set -euo pipefail
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../scripts" && pwd)/lib.sh"
+
+PURGE=0
+case "${1:-}" in
+  --purge-kb) PURGE=1 ;;
+  "") ;;
+  -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  *) echo "dp-uninstall: unknown argument: $1" >&2; exit 2 ;;
+esac
+
+SD="$(dp_state_dir)" || { echo "dp-uninstall: run it inside a git repository" >&2; exit 1; }
+ROOT="$(dp_root)"
+MANIFEST="$SD/install.json"
+if [ ! -f "$MANIFEST" ]; then
+  echo "dev-pattern was not set up here (no .git/dp/install.json); nothing to undo."
+  exit 0
+fi
+
+SREL="$(jq -r .settings_file "$MANIFEST")"
+SFILE="$ROOT/$SREL"
+EXISTED="$(jq -r .settings_existed "$MANIFEST")"
+WRITTEN="$(jq -r .settings_written_sha "$MANIFEST")"
+
+if [ "$(jq '.keys | length' "$MANIFEST")" -gt 0 ] && [ -f "$SFILE" ]; then
+  if [ "$(git hash-object "$SFILE")" = "$WRITTEN" ]; then
+    if [ "$EXISTED" = "true" ]; then
+      cp "$SD/backup/settings.json" "$SFILE"
+      echo "  - $SREL restored to its original content"
+    else
+      rm -f "$SFILE"
+      rmdir "$(dirname "$SFILE")" 2>/dev/null || true
+      echo "  - $SREL removed (setup created it)"
+    fi
+  else
+    NEW="$(jq --slurpfile m "$MANIFEST" '
+      reduce ($m[0].keys | reverse)[] as $k (.;
+        if (try getpath($k.path) catch null) != $k.value then .
+        elif $k.had then setpath($k.path; $k.previous)
+        else delpaths([$k.path])
+             | if $k.parent_created and ((try getpath($k.path[:-1]) catch null) == {})
+               then delpaths([$k.path[:-1]]) else . end
+        end)' "$SFILE")"
+    jq . <<<"$NEW" > "$SFILE.dp-tmp" && mv "$SFILE.dp-tmp" "$SFILE"
+    echo "  - removed dev-pattern keys from $SREL (the file was edited after setup, so it was not restored wholesale)"
+  fi
+fi
+
+EXCLUDE="$(git rev-parse --path-format=absolute --git-path info/exclude)"
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  if [ -f "$EXCLUDE" ]; then
+    awk -v l="$line" '$0 != l' "$EXCLUDE" > "$EXCLUDE.dp-tmp" && mv "$EXCLUDE.dp-tmp" "$EXCLUDE"
+    echo "  - .git/info/exclude: $line"
+  fi
+done < <(jq -r '.excluded[]' "$MANIFEST")
+
+KB_REL="${DP_KB_DIR:-docs/dp/knowledge}"
+if [ "$PURGE" = "1" ]; then
+  rm -rf "${ROOT:?}/docs/dp"
+  rmdir "$ROOT/docs" 2>/dev/null || true
+  echo "  - docs/dp/ deleted"
+  rm -rf "$SD"
+else
+  rm -rf "$SD/sessions" "$SD/waivers" "$SD/backup" "$MANIFEST"
+  touch "$SD/disabled"
+  echo "  = $KB_REL kept; hooks are off for this repository (dp-setup turns them back on)"
+fi
+echo "dev-pattern is removed from this repository."
