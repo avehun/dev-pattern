@@ -25,7 +25,7 @@
 
 ```
 /plugin marketplace add avehun/dev-pattern
-/plugin install dev-pattern --marketplace avehun/dev-pattern
+/plugin install dev-pattern@dev-pattern
 ```
 
 Потом в нужном репозитории:
