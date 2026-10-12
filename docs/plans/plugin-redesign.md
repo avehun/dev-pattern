@@ -28,7 +28,7 @@
 - [x] 1. Каркас (marketplace.json, plugin.json), удаление старого пайплайна.
 - [x] 2. База знаний: шаблоны INDEX/модуля (`covers:`, `verified_at:`), скилл `knowledge`,
       `bin/dp-kb-stale`.
-- [ ] 3. Агенты `researcher`, `worker`; `guard.sh` (fail-open).
+- [x] 3. Агенты `researcher`, `worker`; `guard.sh` (fail-open).
 - [ ] 4. Хуки: SessionStart (правила + INDEX, базовое состояние в `.git/dp/`), Stop (докум. + отказ).
 - [ ] 5. Текст правил для Opus (~25 строк).
 - [ ] 6. Стили `tutor`, `tutor-practice`.
