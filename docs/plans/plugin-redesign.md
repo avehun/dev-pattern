@@ -25,7 +25,7 @@
 
 - [x] 0. Проверка поведения Claude Code: запись сабагентом в plan mode, `agent_type` агентов
       плагина, `stop_hook_active`, контекст из SessionStart плагина, стили плагина.
-- [ ] 1. Каркас (marketplace.json, plugin.json), удаление старого пайплайна.
+- [x] 1. Каркас (marketplace.json, plugin.json), удаление старого пайплайна.
 - [ ] 2. База знаний: шаблоны INDEX/модуля (`covers:`, `verified_at:`), скилл `knowledge`,
       `bin/dp-kb-stale`.
 - [ ] 3. Агенты `researcher`, `worker`; `guard.sh` (fail-open).

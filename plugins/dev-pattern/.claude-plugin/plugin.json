@@ -1,0 +1,8 @@
+{
+  "name": "dev-pattern",
+  "version": "0.1.0",
+  "description": "Knowledge base, plan-before-work, enforced doc updates and tutor output styles for Claude Code",
+  "author": { "name": "avehun" },
+  "repository": "https://github.com/avehun/dev-pattern",
+  "license": "MIT"
+}
