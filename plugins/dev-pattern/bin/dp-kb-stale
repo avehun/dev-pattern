@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# List knowledge modules whose covered files changed after the commit they were verified at.
+#
+#   dp-kb-stale            print stale and unverifiable modules; exit 0
+#   dp-kb-stale --check    same, but exit 1 when anything is stale
+set -euo pipefail
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../scripts" && pwd)/lib.sh"
+
+CHECK=0
+if [ "${1:-}" = "--check" ]; then CHECK=1; fi
+
+KB="$(dp_kb_dir)"
+ROOT="$(dp_root)"
+if [ ! -d "$KB" ]; then
+  echo "no knowledge base at ${KB#"$ROOT"/}"
+  exit 0
+fi
+if ! git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  echo "not a git repository: staleness cannot be checked"
+  exit 0
+fi
+
+stale=0 total=0
+for f in "$KB"/*.md; do
+  [ -e "$f" ] || continue
+  name="$(basename "$f")"
+  if [ "$name" = "INDEX.md" ]; then continue; fi
+  total=$((total + 1))
+
+  sha="$(dp_fm_get "$f" verified_at)"
+  mapfile -t covers < <(dp_fm_list "$f" covers)
+
+  if [ -z "$sha" ] || ! git -C "$ROOT" rev-parse --verify -q "$sha^{commit}" >/dev/null; then
+    echo "UNVERIFIED  $name  (verified_at '${sha}' is not a commit in this repo)"
+    stale=$((stale + 1)); continue
+  fi
+  if [ "${#covers[@]}" -eq 0 ]; then
+    echo "UNVERIFIED  $name  (no covers: list)"
+    stale=$((stale + 1)); continue
+  fi
+
+  # committed and uncommitted changes since verified_at, limited to covered paths
+  # plus new untracked files, which git diff does not list
+  mapfile -t changed < <({
+    git -C "$ROOT" diff --name-only "$sha" -- "${covers[@]}"
+    git -C "$ROOT" ls-files --others --exclude-standard -- "${covers[@]}"
+  } 2>/dev/null)
+  missing=()
+  for c in "${covers[@]}"; do
+    if [ ! -e "$ROOT/$c" ]; then missing+=("$c"); fi
+  done
+
+  if [ "${#changed[@]}" -gt 0 ] || [ "${#missing[@]}" -gt 0 ]; then
+    stale=$((stale + 1))
+    echo "STALE       $name  (verified at $sha)"
+    for c in "${changed[@]:0:5}"; do echo "              changed: $c"; done
+    if [ "${#changed[@]}" -gt 5 ]; then echo "              … and $(( ${#changed[@]} - 5 )) more"; fi
+    for m in "${missing[@]}"; do echo "              missing: $m"; done
+  fi
+done
+
+echo "$stale of $total module(s) need re-verification"
+if [ "$CHECK" = "1" ] && [ "$stale" -gt 0 ]; then exit 1; fi
+exit 0
